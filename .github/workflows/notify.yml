@@ -1,0 +1,97 @@
+name: Class Notifications
+
+on:
+  schedule:
+    # Monday
+    - cron: '25 6 * * 1'  # 08:25 - Networks 511
+    - cron: '25 7 * * 1'  # 09:25 - PRO 511 Prac
+    - cron: '25 8 * * 1'  # 10:25 - PRO 511 Prac
+    - cron: '25 9 * * 1'  # 11:25 - Math 511
+    # Tuesday
+    - cron: '25 6 * * 2'  # 08:25 - Math 511
+    - cron: '25 7 * * 2'  # 09:25 - Math 511
+    - cron: '25 8 * * 2'  # 10:25 - Networks 511
+    - cron: '25 9 * * 2'  # 11:25 - WebTech 511A Theory
+    - cron: '25 11 * * 2' # 13:25 - INS 511A Prac
+    - cron: '25 12 * * 2' # 14:25 - INS 511A Prac
+    # Wednesday
+    - cron: '25 6 * * 3'  # 08:25 - INS 511A Theory
+    - cron: '25 7 * * 3'  # 09:25 - Math 511
+    - cron: '25 9 * * 3'  # 11:25 - WebTech 511A Theory
+    - cron: '25 11 * * 3' # 13:25 - PRO 511
+    # Thursday
+    - cron: '25 6 * * 4'  # 08:25 - Networks 511
+    - cron: '25 7 * * 4'  # 09:25 - INS 511A Theory
+    - cron: '25 8 * * 4'  # 10:25 - WebTech 511A Prac
+    - cron: '25 9 * * 4'  # 11:25 - WebTech 511A Prac
+    # Friday
+    - cron: '25 6 * * 5'  # 08:25 - PRO 511
+    - cron: '25 7 * * 5'  # 09:25 - Networks 511
+  workflow_dispatch:
+
+jobs:
+  send-notification:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Class
+        id: class
+        run: |
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          DAY=$(date -u +%u)
+          TIME="${HOUR}:${MINUTE}"
+          
+          declare -A SCHEDULE
+          # Monday (1)
+          SCHEDULE["1-06:25"]="Networks 511|Auditorium|Rohan"
+          SCHEDULE["1-07:25"]="PRO 511 Prac|Lab 3|Ziyanda"
+          SCHEDULE["1-08:25"]="PRO 511 Prac|Lab 3|Ziyanda"
+          SCHEDULE["1-09:25"]="Math 511|Lab 3|Benvollens"
+          # Tuesday (2)
+          SCHEDULE["2-06:25"]="Math 511|Lab 3|Benvollens"
+          SCHEDULE["2-07:25"]="Math 511|Lab 3|Benvollens"
+          SCHEDULE["2-08:25"]="Networks 511|Auditorium|Rohan"
+          SCHEDULE["2-09:25"]="WebTech 511A Theory|Auditorium|Jemina"
+          SCHEDULE["2-11:25"]="INS 511A Prac|Lab 3|Ebenezer"
+          SCHEDULE["2-12:25"]="INS 511A Prac|Lab 3|Ebenezer"
+          # Wednesday (3)
+          SCHEDULE["3-06:25"]="INS 511A Theory|Auditorium|Ebenezer"
+          SCHEDULE["3-07:25"]="Math 511|Lab 3|Benvollens"
+          SCHEDULE["3-09:25"]="WebTech 511A Theory|Auditorium|Jemina"
+          SCHEDULE["3-11:25"]="PRO 511|Auditorium|Ziyanda"
+          # Thursday (4)
+          SCHEDULE["4-06:25"]="Networks 511|Auditorium|Rohan"
+          SCHEDULE["4-07:25"]="INS 511A Theory|Auditorium|Ebenezer"
+          SCHEDULE["4-08:25"]="WebTech 511A Prac|Lab 3|Jemina"
+          SCHEDULE["4-09:25"]="WebTech 511A Prac|Lab 3|Jemina"
+          # Friday (5)
+          SCHEDULE["5-06:25"]="PRO 511|Auditorium|Ziyanda"
+          SCHEDULE["5-07:25"]="Networks 511|Auditorium|Rohan"
+          
+          KEY="${DAY}-${TIME}"
+          INFO=${SCHEDULE[$KEY]}
+          
+          if [ -z "$INFO" ]; then
+            echo "No class found for $KEY"
+            echo "subject=None" >> $GITHUB_OUTPUT
+          else
+            IFS='|' read -r SUBJECT VENUE LECTURER <<< "$INFO"
+            echo "subject=$SUBJECT" >> $GITHUB_OUTPUT
+            echo "venue=$VENUE" >> $GITHUB_OUTPUT
+            echo "lecturer=$LECTURER" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send Notification
+        if: steps.class.outputs.subject != 'None'
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Basic ${{ secrets.ONESIGNAL_API_KEY }}" \
+            -d '{
+              "app_id": "${{ secrets.ONESIGNAL_APP_ID }}",
+              "included_segments": ["All"],
+              "headings": {"en": "⏰ Class in 5 Minutes!"},
+              "contents": {"en": "${{ steps.class.outputs.subject }} at ${{ steps.class.outputs.venue }} - ${{ steps.class.outputs.lecturer }}"},
+              "priority": 10
+            }' \
+            https://onesignal.com/api/v1/notifications
